@@ -2,10 +2,10 @@
 
 # # IU modules load
 module unload python 
-module load python #/3.6.8 
-module load fsl/6.0.1
+module load python #/3.8.2 current version
+module load fsl/6.0.5.1
 module load mricrogl
-module load gsl  #needed for AFNI. 
+# module load gsl  #needed for AFNI. <- auto loaded w/afni
 module load afni
 module load ants
 module load ica-aroma/0.4.4
@@ -20,13 +20,15 @@ if [[ -z ${FSLDIR} ]] ; then
 fi
 
 # where this package of scripts are
-export EXEDIR=$(dirname "$(readlink -f "$0")")
+# export EXEDIR=$(dirname "$(readlink -f "$0")")
+export EXEDIR="/N/project/adniCONN/IUSM-ConnPipe"
 
 source ${EXEDIR}/src/func/bash_funcs.sh
 
 ################################################################################
 # USER INSTRUCTIONS- PLEASE SET THE NAME OF THE CONFIG FILE TO READ
-source ${EXEDIR}/config.sh
+# source ${EXEDIR}/config.sh
+source "/path/to/anywhere/config.sh"
 ################################################################################
 
 
@@ -215,7 +217,8 @@ fi
 	
 if ${runAll}; then
 	find ${path2data} -maxdepth 1 -mindepth 1 -type d -printf '%f\n' \
-	| sort > ${path2data}/${subj2run}	
+	| sort > "${path2data}/subj2run_all.txt"
+    	export subj2run="${path2data}/subj2run_all.txt"	
 fi 
 
 #################################################################################
@@ -227,7 +230,7 @@ main() {
 
 log "START running Connectivity Pipeline on the following subjects:"
 
-IFS=$'\r\n' GLOBIGNORE='*' command eval 'SUBJECTS=($(cat ${path2data}/${subj2run}))'
+IFS=$'\r\n' GLOBIGNORE='*' command eval 'SUBJECTS=($(cat ${subj2run}))'
 log "subjects: ${SUBJECTS[@]}"
 
 echo "##################"

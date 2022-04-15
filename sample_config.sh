@@ -23,8 +23,8 @@ export path2data="/set_your_path/Datadir"
     export runAll=false 
 
     ## USER -- if running a subset of subjects, a list of subject ID's can be read from 
-    ## a text file located in path2data; user can name the file here:
-    export subj2run="subj2run.txt"
+    ## a text file; user can name the file and path here:
+    export subj2run="/path/to/your/subj2run.txt"
 
 ################################################################################
 #####################  SET UP DIRECTORY STRUCTURE  #############################
