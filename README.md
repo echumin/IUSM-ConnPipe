@@ -77,7 +77,7 @@ The Pipeline is run by executing the **sample_main.sh** file. We recommend makin
 
 #### Specifying subject data
 
-The data direcotry and the name of the configuration file (i.e. **sample_config.sh**, see below) are specified in the **sample_main.sh** file. 
+The data directory and the name of the configuration file (i.e. **sample_config.sh**, see below) are specified in the **sample_main.sh** file. 
 To specify data for preprocessing, change the **path2data** variable in **sample_main.sh**.
 
 ```

@@ -222,7 +222,7 @@ if [[ -d ${DWIpath} ]]; then
             PhaseEncodingDirection=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 '.PhaseEncodingDirection'`
             echo "PhaseEncodingDirection from ${dcm2niix_json} is ${PhaseEncodingDirection}"            
 
-            if [[ "${PhaseEncodingDirection}" == '"j-"' ]]; then
+            if [[ "${PhaseEncodingDirection}" == '"j-"' ]]; then # A>>P
                 if [[ "${nscan}" -eq "1" ]]; then 
                     DWIdcm_phase_1="0 -1 0 ${configs_DWI_readout}"
                     log "${DWIdcm_phase_1}"
@@ -230,12 +230,28 @@ if [[ -d ${DWIpath} ]]; then
                     DWIdcm_phase_2="0 -1 0 ${configs_DWI_readout}"
                     log "${DWIdcm_phase_2}"
                 fi 
-            elif [[ "${PhaseEncodingDirection}" == '"j"' ]]; then
+            elif [[ "${PhaseEncodingDirection}" == '"j"' ]]; then # P>>A
                 if [[ "${nscan}" -eq "1" ]]; then 
                     DWIdcm_phase_1="0 1 0 ${configs_DWI_readout}"
                     log "${DWIdcm_phase_1}"
                 elif [[ "${nscan}" -eq "2" ]]; then 
                     DWIdcm_phase_2="0 1 0 ${configs_DWI_readout}"
+                    log "${DWIdcm_phase_2}"
+                fi 
+            elif [[ "${PhaseEncodingDirection}" == '"i"' ]]; then # L>>R
+                if [[ "${nscan}" -eq "1" ]]; then 
+                    DWIdcm_phase_1="-1 0 0 ${configs_DWI_readout}"
+                    log "${DWIdcm_phase_1}"
+                elif [[ "${nscan}" -eq "2" ]]; then 
+                    DWIdcm_phase_2="-1 0 0 ${configs_DWI_readout}"
+                    log "${DWIdcm_phase_2}"
+                fi 
+            elif [[ "${PhaseEncodingDirection}" == '"i-"' ]]; then # R>>L
+                if [[ "${nscan}" -eq "1" ]]; then 
+                    DWIdcm_phase_1="1 0 0 ${configs_DWI_readout}"
+                    log "${DWIdcm_phase_1}"
+                elif [[ "${nscan}" -eq "2" ]]; then 
+                    DWIdcm_phase_2="1 0 0 ${configs_DWI_readout}"
                     log "${DWIdcm_phase_2}"
                 fi 
             else 
