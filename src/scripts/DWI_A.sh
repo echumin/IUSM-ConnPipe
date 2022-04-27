@@ -71,20 +71,21 @@ if [[ -d ${DWIpath} ]]; then
 
     log "DWI_A processing for subject ${SUBJ}"
 
-    # Calculate readout time
-    if [[ ! -z "${configs_DWI_readout}" ]]; then
-        # if two DICOM directories exist 
-        if [[ ! -z "${configs_DWI_dcmFolder1}" ]] && [[ ! -z "${configs_DWI_dcmFolder2}" ]]; then
+    
+    # if two DICOM directories exist 
+    if [[ ! -z "${configs_DWI_dcmFolder1}" ]] && [[ ! -z "${configs_DWI_dcmFolder2}" ]]; then
+        DWIdir1="${DWIpath}/${configs_DWI_dcmFolder1}"
+        DWIdir2="${DWIpath}/${configs_DWI_dcmFolder2}"
 
-            DWIdir1="${DWIpath}/${configs_DWI_dcmFolder1}"
-            DWIdir2="${DWIpath}/${configs_DWI_dcmFolder2}"
+        log "${configs_DWI_dcmFolder1} and ${configs_DWI_dcmFolder2} have been defined by user"
 
-            log "${configs_DWI_dcmFolder1} and ${configs_DWI_dcmFolder2} have been defined by user"
+        if [[ -d "${DWIdir1}" ]] && [[ -d "${DWIdir2}" ]]; then
+            # Calculate readout time
+            DWI1dcm_niifile="0_DWI_ph1"
+            DWI2dcm_niifile="0_DWI_ph2"
+            export nscanmax=2 # DWI acquired in two phase directions (e.g., AP and PA)
+            if [[ -z "${configs_DWI_readout}" ]]; then
 
-            if [[ -d "${DWIdir1}" ]] && [[ -d "${DWIdir2}" ]]; then
-
-                export nscanmax=2 # DWI acquired in two phase directions (e.g., AP and PA)
-                
                 jsonfile="null"
 
                 cmd="${EXEDIR}/src/scripts/get_readout.sh ${jsonfile} ${DWIdir1} DWI" 
@@ -100,41 +101,39 @@ if [[ -d ${DWIpath} ]]; then
                 if (( $(echo "${DWIreadout1} == ${DWIreadout2}" |bc -l) )) ; then
                     export configs_DWI_readout=${DWIreadout1}
                     echo "configs_DWI_readout -- ${configs_DWI_readout}"                    
-                    DWI1dcm_niifile="0_DWI_ph1"
-                    DWI2dcm_niifile="0_DWI_ph2"
 
                 else
                     log "WARNING DWI readout values do not match! Exiting..."
                     exit 1
                 fi
-            else
-                log "WARNING ${DWIdir1} and/or ${DWIdir2} not found!. Exiting..."
-                exit 1
-            fi 
-
+            fi
         else
+            log "WARNING ${DWIdir1} and/or ${DWIdir2} not found!. Exiting..."
+            exit 1
+        fi 
+    else
 
-            DWIdir1="${DWIpath}/${configs_DWI_dcmFolder}"
+        DWIdir1="${DWIpath}/${configs_DWI_dcmFolder}"
 
-            log "${DWIdir1} has been defined by user"
-
-            export nscanmax=1  # DWI acquired in one phase direction (b0's non-withstanding)
+        log "${DWIdir1} has been defined by user"
           
-            if [[ -d "${DWIdir1}" ]]; then 
-            
-                jsonfile="null"
+        if [[ -d "${DWIdir1}" ]]; then 
+	    DWI1dcm_niifile="0_DWI"
+            export nscanmax=1  # DWI acquired in one phase direction (b0's non-withstanding)
+            # Calculate readout time
+            if [[ -z "${configs_DWI_readout}" ]]; then
 
+                jsonfile="${DWIpath}/0_DWI.json"
                 cmd="${EXEDIR}/src/scripts/get_readout.sh ${jsonfile} ${DWIdir1} DWI" 
                 log $cmd
                 export configs_DWI_readout=`$cmd`
                 echo "configs_DWI_readout -- ${configs_DWI_readout}"
-                DWI1dcm_niifile="0_DWI"
-
-            else 
-                log "WARNING ${DWIdir1} not found!. Exiting..."
-                exit 1    
-            fi 
-        fi 
+                
+            fi
+        else 
+            log "WARNING ${DWIdir1} not found!. Exiting..."
+            exit 1    
+        fi  
     fi
 
     for ((nscan=1; nscan<=nscanmax; nscan++)); do  #1 or 2 DWI scans
@@ -146,9 +145,7 @@ if [[ -d ${DWIpath} ]]; then
             path_DWIdcm=${DWIdir2}
             fileNii=${DWI2dcm_niifile}
         fi 
-            
         log "path_DWIdcm is -- ${path_DWIdcm}"
-
         export fileNifti="${fileNii}.nii"
         export fileJson="${fileNii}.json"
         export fileBval="${fileNii}.bval"
@@ -178,13 +175,12 @@ if [[ -d ${DWIpath} ]]; then
             else
 
                 echo "There are ${#dicom_files[@]} dicom files in ${path_DWIdcm} "
-
                 # Remove any existing .nii/.nii.gz images from dicom directories.
                 rm -rf ${DWIpath}/${fileNii}*
                 log "rm -rf ${fileNii}"
                 # Create nifti bvec and bval files.
                 fileLog="${DWIpath}/dcm2niix.log"
-                cmd="dcm2niix -f ${fileNii} -o ${DWIpath} -v y ${path_DWIdcm} > ${fileLog}"
+                cmd="${EXEDIR}/src/scripts/dcm2niix -f ${fileNii} -o ${DWIpath} -v y ${path_DWIdcm} > ${fileLog}"
                 log $cmd
                 eval $cmd 
                 # gzip nifti image
@@ -199,27 +195,71 @@ if [[ -d ${DWIpath} ]]; then
         dcm2niix_json="${DWIpath}/${fileJson}"
 
         if [[ -e ${dcm2niix_json} ]]; then
+    	    #####
+		export scanner=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 ."Manufacturer"`
+		export scanner=${scanner:1:-1}
+		if [ ${scanner} == "Siemens" ] || [ ${scanner} == "GE" ]; then
+			export scanner_param_TR="RepetitionTime"  # "RepetitionTime" for Siemens;
+			export scanner_param_TE="EchoTime"  # "EchoTime" for Siemens;
+			export scanner_param_FlipAngle="FlipAngle"  # "FlipAngle" for Siemens; 
+			export scanner_param_EffectiveEchoSpacing="EffectiveEchoSpacing"  # "EffectiveEchoSpacing" for Siemens; 
+			export scanner_param_BandwidthPerPixelPhaseEncode="BandwidthPerPixelPhaseEncode"  # "BandwidthPerPixelPhaseEncode" for Siemens;
+			export scanner_param_slice_fractimes="SliceTiming"  # "SliceTiming" for Siemens;
+			export scanner_param_TotalReadoutTime="TotalReadoutTime"
+			export scanner_param_AcquisitionMatrix="AcquisitionMatrixPE"
+			export scanner_param_PhaseEncodingDirection="PhaseEncodingDirection"
+		#LEGACY TAGS FOR GE DATA. 2021 AND LATER DCM2NIIX SEEM TO HAVE STANDARDIZED JSON TAGS    	
+		#elif [[ ${scanner} == "GE" ]]; then
+			# export scanner_param_TR="tr"  # "tr" for GE
+			# export scanner_param_TE="te"  # "te" for GE
+			# export scanner_param_FlipAngle="flip_angle"  # "flip_angle" for GE
+			# export scanner_param_EffectiveEchoSpacing="effective_echo_spacing"  # "effective_echo_spacing" for GE
+			# export scanner_param_BandwidthPerPixelPhaseEncode="NULL"  # unknown for GE; "pixel_bandwidth is something different
+			# export scanner_param_slice_fractimes="slice_timing"  # "slice_timing" for GE also possible 
+			# export scanner_param_TotalReadoutTime="TotalReadoutTime"
+			# export scanner_param_AcquisitionMatrix="acquisition_matrix"
+			# export scanner_param_PhaseEncodingDirection="phase_encode_direction"
+		elif [[ "${scanner}" == "Philips" ]]; then
+			export scanner_param_TR="RepetitionTime"  
+			export scanner_param_TE="EchoTime"  
+			export scanner_param_FlipAngle="FlipAngle"  
+			export scanner_param_EffectiveEchoSpacing="NULL"  # Philips does not provide enough info to calculate this
+			export scanner_param_BandwidthPerPixelPhaseEncode="NULL"  # unknown for Philips; "pixel_bandwidth is something different 
+			export scanner_param_slice_fractimes="NULL"  # Unreliable and maybe even unknown for Philips data
+			export scanner_param_TotalReadoutTime="NULL" # Unreliable and maybe even unknown for Philips data
+			export scanner_param_AcquisitionMatrix="AcquisitionMatrixPE"
+			export scanner_param_PhaseEncodingDirection="PhaseEncodingAxis"
+		else
+			log "ERROR - unrecognized or missing scanner manufacturer tag in json header"
+			exit 1
+		fi
+# THIS NEEDS FIXED. AS IT STANDS A USER PROVIDED READOUT TIME WILL BYPASS ANY COMPUTATION OF IT BY THE PIPELINE.
+# BUT get_readout IS ONLY CALLED AT THE TOP (UNDER ASSUMPTION JSON IS PRESENT) AND NOT CALLED POST dcm2niix.
+# HERE IT IS EXTRACTED FROM THE JSON (DIVEDED BY ACCF) AND COMPARED TO A VALUE THAT IS EITHER USER SET OR WAS EXTRACTED FROM EXISTING JSON.
+# THIS IS USELESS, GET READOUT NEEDS TO BE CALLED AGAIN ON NEW JSON FORGET COMPARISON TO MANUAL CONPUTATION.
+# MANUAL CONPUTATION CAN BE DONE AS A LAST RESULT IF NO TOTAL READOUT JSON TAG EXISTS.
+	    if [[ -z "${configs_DWI_readout}" ]]; then
+            	TotalReadoutTime=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 .${scanner_param_TotalReadoutTime}`            
+            	echo "TotalReadoutTime from ${dcm2niix_json} is ${TotalReadoutTime}"
+            	AccF=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 '.ParallelReductionFactorInPlane'`
+            	echo "ParallelReductionFactorInPlane from ${dcm2niix_json} is ${AccF}"
+            	if [ -z "${AccF}" ] || [[ "${AccF}" -eq "null" ]]; then
+              	    AccF=1
+            	fi 
+            	TotalReadoutTime=$(bc <<< "scale=8 ; ${TotalReadoutTime} / ${AccF}")
+            	echo "TotalReadoutTime/AccF = ${TotalReadoutTime}"
 
-            TotalReadoutTime=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 '.TotalReadoutTime'`            
-            echo "TotalReadoutTime from ${dcm2niix_json} is ${TotalReadoutTime}"
-            AccF=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 '.ParallelReductionFactorInPlane'`
-            echo "ParallelReductionFactorInPlane from ${dcm2niix_json} is ${AccF}"
-            if [ -z "${AccF}" ] || [[ "${AccF}" -eq "null" ]]; then
-                AccF=1
-            fi 
-            TotalReadoutTime=$(bc <<< "scale=8 ; ${TotalReadoutTime} / ${AccF}")
-            echo "TotalReadoutTime/AccF = ${TotalReadoutTime}"
+            	diff=$(echo "$TotalReadoutTime - $configs_DWI_readout" | bc)
 
-            diff=$(echo "$TotalReadoutTime - $configs_DWI_readout" | bc)
+            	echo "diff = TotalReadoutTime - configs_DWI_readout = $diff"
 
-            echo "diff = TotalReadoutTime - configs_DWI_readout = $diff"
-
-            if [[ $(bc <<< "$diff >= 0.1") -eq 1 ]] || [[ $(bc <<< "$diff <= -0.1") -eq 1 ]]; then
-                log "ERROR Calculated readout time not consistent with readout time provided by dcm2niix"
+           	if [[ $(bc <<< "$diff >= 0.1") -eq 1 ]] || [[ $(bc <<< "$diff <= -0.1") -eq 1 ]]; then
+                  log "ERROR Calculated readout time not consistent with readout time provided by dcm2niix"
                 exit 1
-            fi 
+                fi
+	    fi 
 
-            PhaseEncodingDirection=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 '.PhaseEncodingDirection'`
+            PhaseEncodingDirection=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 .${scanner_param_PhaseEncodingDirection}`
             echo "PhaseEncodingDirection from ${dcm2niix_json} is ${PhaseEncodingDirection}"            
 
             if [[ "${PhaseEncodingDirection}" == '"j-"' ]]; then # A>>P
@@ -262,7 +302,7 @@ if [[ -d ${DWIpath} ]]; then
             export DWIdcm_phase_2
 
 
-            DWIdcm_SliceTiming=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 '.SliceTiming'`
+            DWIdcm_SliceTiming=`cat ${dcm2niix_json} | ${EXEDIR}/src/func/jq-linux64 .${scanner_param_slice_fractimes}`
             
             echo "SliceTiming from ${dcm2niix_json} is ${DWIdcm_SliceTiming}"            
 

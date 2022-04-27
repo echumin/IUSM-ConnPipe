@@ -75,7 +75,45 @@ source ${EXEDIR}/src/func/bash_funcs.sh
 jsonfile=$1 dicomPath=$2 modality=$3
 
 if [[ -f "${jsonfile}" ]]; then 
-
+    #####
+	export scanner=`cat ${jsonfile} | ${EXEDIR}/src/func/jq-linux64 ."Manufacturer"`
+	export scanner=${scanner:1:-1}
+	if [ ${scanner} == "Siemens" ] || [ ${scanner} == "GE" ]; then
+		export scanner_param_TR="RepetitionTime"  # "RepetitionTime" for Siemens;
+		export scanner_param_TE="EchoTime"  # "EchoTime" for Siemens;
+		export scanner_param_FlipAngle="FlipAngle"  # "FlipAngle" for Siemens; 
+		export scanner_param_EffectiveEchoSpacing="EffectiveEchoSpacing"  # "EffectiveEchoSpacing" for Siemens; 
+		export scanner_param_BandwidthPerPixelPhaseEncode="BandwidthPerPixelPhaseEncode"  # "BandwidthPerPixelPhaseEncode" for Siemens;
+		export scanner_param_slice_fractimes="SliceTiming"  # "SliceTiming" for Siemens;
+		export scanner_param_TotalReadoutTime="TotalReadoutTime"
+		export scanner_param_AcquisitionMatrix="AcquisitionMatrixPE"
+		export scanner_param_PhaseEncodingDirection="PhaseEncodingDirection"
+	#LEGACY TAGS FOR GE DATA. 2021 AND LATER DCM2NIIX SEEM TO HAVE STANDARDIZED JSON TAGS    	
+	#elif [[ ${scanner} == "GE" ]]; then
+		# export scanner_param_TR="tr"  # "tr" for GE
+		# export scanner_param_TE="te"  # "te" for GE
+		# export scanner_param_FlipAngle="flip_angle"  # "flip_angle" for GE
+		# export scanner_param_EffectiveEchoSpacing="effective_echo_spacing"  # "effective_echo_spacing" for GE
+		# export scanner_param_BandwidthPerPixelPhaseEncode="NULL"  # unknown for GE; "pixel_bandwidth is something different
+		# export scanner_param_slice_fractimes="slice_timing"  # "slice_timing" for GE also possible 
+		# export scanner_param_TotalReadoutTime="TotalReadoutTime"
+		# export scanner_param_AcquisitionMatrix="acquisition_matrix"
+		# export scanner_param_PhaseEncodingDirection="phase_encode_direction"
+	elif [[ "${scanner}" == "Philips" ]]; then
+		export scanner_param_TR="RepetitionTime"  
+		export scanner_param_TE="EchoTime"  
+		export scanner_param_FlipAngle="FlipAngle"  
+		export scanner_param_EffectiveEchoSpacing="NULL"  # Philips does not provide enough info to calculate this
+		export scanner_param_BandwidthPerPixelPhaseEncode="NULL"  # unknown for Philips; "pixel_bandwidth is something different 
+		export scanner_param_slice_fractimes="NULL"  # Unreliable and maybe even unknown for Philips data
+		export scanner_param_TotalReadoutTime="NULL" # Unreliable and maybe even unknown for Philips data
+		export scanner_param_AcquisitionMatrix="AcquisitionMatrixPE"
+		export scanner_param_PhaseEncodingDirection="PhaseEncodingAxis"
+	else
+		log "ERROR - unrecognized or missing scanner manufacturer tag in json header"
+		exit 1
+	fi
+    
     # find TotalReadoutTime
     SEreadOutTime=`cat ${jsonfile} | ${EXEDIR}/src/func/jq-linux64 .${scanner_param_TotalReadoutTime}`
     
@@ -97,7 +135,7 @@ if [[ -f "${jsonfile}" ]]; then
         log2file "WARNING key ${scanner_param_TotalReadoutTime} was not found in ${jsonfile}"
         log2file "Computing ${scanner_param_TotalReadoutTime} from other variables... "
 
-        dim1=`cat ${jsonfile} | ${EXEDIR}/src/func/jq-linux64 .${scammer_param_AcquisitionMatrix}`
+        dim1=`cat ${jsonfile} | ${EXEDIR}/src/func/jq-linux64 .${scanner_param_AcquisitionMatrix}`
         dim1=`echo $dim1 | awk '{ print $2}' | sed 's/*.*//'`
         dim1=${dim1%,*}
 
